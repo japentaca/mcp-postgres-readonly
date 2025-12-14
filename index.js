@@ -23,12 +23,6 @@ const __dirname = path.dirname(__filename);
 
 // Cache para almacenar configuraciones de proyectos
 const configCache = new Map();
-const ENV_PATHS_TO_CHECK = [
-  (cwd) => path.join(cwd, '.env'),
-  (cwd) => path.join(cwd, '.env.local'),
-  (cwd) => path.join(path.dirname(cwd), '.env'),
-  (cwd) => path.join(path.dirname(path.dirname(cwd)), '.env'),
-];
 
 /**
  * Cargar la configuración de PostgreSQL desde el .env del proyecto actual
@@ -46,32 +40,28 @@ function loadProjectConfig(projectPath) {
     }
   }
 
-  console.error(`🔍 Buscando configuración PostgreSQL en: ${projectPath}`);
+  const envPath = path.join(projectPath, '.env');
+  console.error(`🔍 Buscando configuración PostgreSQL en: ${envPath}`);
 
-  // Intentar cargar desde diferentes ubicaciones
-  for (const pathFn of ENV_PATHS_TO_CHECK) {
-    const envPath = pathFn(projectPath);
+  if (fs.existsSync(envPath)) {
+    try {
+      const result = dotenv.config({ path: envPath, override: false });
+      const connectionString = result.parsed?.MCP_PG_CONNSTR || process.env.MCP_PG_CONNSTR;
 
-    if (fs.existsSync(envPath)) {
-      try {
-        const result = dotenv.config({ path: envPath, override: false });
-        const connectionString = result.parsed?.MCP_PG_CONNSTR || process.env.MCP_PG_CONNSTR;
-
-        if (connectionString) {
-          console.error(`✅ Configuración cargada desde: ${envPath}`);
-          configCache.set(cacheKey, {
-            connectionString,
-            timestamp: Date.now()
-          });
-          return connectionString;
-        }
-      } catch (error) {
-        console.error(`⚠️ Error leyendo ${envPath}: ${error.message}`);
+      if (connectionString) {
+        console.error(`✅ Configuración cargada desde: ${envPath}`);
+        configCache.set(cacheKey, {
+          connectionString,
+          timestamp: Date.now()
+        });
+        return connectionString;
       }
+    } catch (error) {
+      console.error(`⚠️ Error leyendo ${envPath}: ${error.message}`);
     }
   }
 
-  console.error(`❌ No se encontró MCP_PG_CONNSTR en ${projectPath}`);
+  console.error(`❌ No se encontró MCP_PG_CONNSTR en ${envPath}`);
   return null;
 }
 
@@ -84,12 +74,8 @@ function getConnectionString() {
   const connectionString = loadProjectConfig(cwd);
 
   if (!connectionString) {
-    // Intentar desde el .env de VS Code
-    if (process.env.MCP_PG_CONNSTR) {
-      return process.env.MCP_PG_CONNSTR;
-    }
     throw new Error(
-      `MCP_PG_CONNSTR no configurada en ${cwd}\n` +
+      `MCP_PG_CONNSTR no configurada en ${cwd}/.env\n` +
       `Crea un archivo .env en la raíz del proyecto con:\n` +
       `MCP_PG_CONNSTR=postgresql://usuario:contraseña@localhost:5432/basededatos`
     );

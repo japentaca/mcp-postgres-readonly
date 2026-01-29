@@ -66,18 +66,43 @@ function loadProjectConfig(projectPath) {
 }
 
 /**
- * Obtener la conexión actual basada en el directorio de trabajo
+ * Obtener la conexión actual basada en múltiples fuentes
+ * Prioridad:
+ * 1. Variable de entorno MCP_PG_CONNSTR pasada directamente por el cliente
+ * 2. Archivo .env en MCP_PROJECT_PATH (ruta del proyecto cliente)
+ * 3. Archivo .env en el directorio de trabajo actual (cwd)
  * @returns {string} Connection string
  */
 function getConnectionString() {
+  // 1. Primero verificar si ya está en las variables de entorno (pasada por el cliente MCP)
+  if (process.env.MCP_PG_CONNSTR) {
+    console.error(`✅ Usando MCP_PG_CONNSTR desde variables de entorno del cliente`);
+    return process.env.MCP_PG_CONNSTR;
+  }
+
+  // 2. Verificar si el cliente pasó la ruta del proyecto
+  const projectPath = process.env.MCP_PROJECT_PATH;
+  if (projectPath) {
+    console.error(`📁 Buscando .env en proyecto cliente: ${projectPath}`);
+    const connectionString = loadProjectConfig(projectPath);
+    if (connectionString) {
+      return connectionString;
+    }
+  }
+
+  // 3. Fallback al directorio de trabajo actual
   const cwd = process.cwd();
+  console.error(`📁 Buscando .env en cwd: ${cwd}`);
   const connectionString = loadProjectConfig(cwd);
 
   if (!connectionString) {
     throw new Error(
-      `MCP_PG_CONNSTR no configurada en ${cwd}/.env\n` +
-      `Crea un archivo .env en la raíz del proyecto con:\n` +
-      `MCP_PG_CONNSTR=postgresql://usuario:contraseña@localhost:5432/basededatos`
+      `MCP_PG_CONNSTR no configurada.\n\n` +
+      `Opciones de configuración:\n` +
+      `1. Pasar MCP_PG_CONNSTR como variable de entorno en la configuración del servidor MCP\n` +
+      `2. Pasar MCP_PROJECT_PATH apuntando al directorio del proyecto con .env\n` +
+      `3. Crear .env en ${cwd} con:\n` +
+      `   MCP_PG_CONNSTR=postgresql://usuario:contraseña@localhost:5432/basededatos`
     );
   }
 
